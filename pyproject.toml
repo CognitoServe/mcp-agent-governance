@@ -1,0 +1,15 @@
+[tool.pytest.ini_options]
+asyncio_mode       = "auto"          # every async test is collected automatically
+asyncio_default_fixture_loop_scope = "module"
+testpaths          = ["tests"]
+python_files       = ["test_*.py", "*_test.py"]
+python_classes     = ["Test*"]
+python_functions   = ["test_*"]
+addopts            = "-ra -q --tb=short"
+
+[tool.coverage.run]
+source = ["app"]
+omit   = ["tests/*"]
+
+[tool.coverage.report]
+show_missing = true
