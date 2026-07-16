@@ -1,12 +1,64 @@
-# Runtime
-fastapi==0.115.6
-uvicorn[standard]==0.32.1
+# ── Runtime ────────────────────────────────────────────────────────────────────
+# fastapi upgraded from 0.115.6 → 0.139.0 to resolve the starlette conflict:
+#   fastapi==0.115.6 requires starlette<0.42.0,>=0.40.0
+#   mcp==1.28.1      requires starlette>=0.27  (resolves to starlette==1.3.1)
+# fastapi==0.139.0 requires starlette>=0.46.0 (no upper bound) — compatible.
+fastapi==0.139.0
+uvicorn[standard]==0.51.0
 asyncpg==0.30.0
-pydantic==2.10.4
-python-dotenv==1.0.1   # loads .env in local dev via startup script
+pydantic==2.13.4
+python-dotenv==1.2.2     # pulled by mcp[cli]; satisfies our usage too
 
-# Testing
+# ── MCP ────────────────────────────────────────────────────────────────────────
+mcp==1.28.1              # includes FastMCP used in app/mcp_server.py
+
+# ── uvicorn[standard] extras ────────────────────────────────────────────────────
+httptools==0.8.0
+watchfiles==1.2.0
+websockets==16.1
+pyyaml==6.0.3
+
+# ── MCP / FastAPI transitive dependencies (pinned for reproducibility) ─────────
+annotated-doc==0.0.4
+annotated-types==0.7.0
+anyio==4.14.2
+attrs==26.1.0
+certifi==2026.6.17
+cffi==2.1.0
+click==8.4.2
+colorama==0.4.6
+cryptography==49.0.0
+h11==0.16.0
+httpcore==1.0.9
+httpx==0.28.1
+httpx-sse==0.4.3
+idna==3.18
+jsonschema==4.26.0
+jsonschema-specifications==2025.9.1
+markdown-it-py==4.2.0
+mdurl==0.1.2
+pycparser==3.0
+pydantic-core==2.46.4
+pydantic-settings==2.14.2
+Pygments==2.20.0
+PyJWT==2.13.0
+python-multipart==0.0.32
+pywin32==312
+referencing==0.37.0
+rich==15.0.0
+rpds-py==2026.6.3
+shellingham==1.5.4
+sse-starlette==3.4.5
+starlette==1.3.1
+typer==0.27.0
+typing-extensions==4.16.0
+typing-inspection==0.4.2
+
+# ── Testing ────────────────────────────────────────────────────────────────────
 pytest==8.3.4
 pytest-asyncio==0.24.0
-httpx==0.28.1          # ASGI test client used by FastAPI's TestClient
 coverage[toml]==7.6.10
+# pytest transitive
+iniconfig==2.3.0
+packaging==26.2
+pluggy==1.6.0
