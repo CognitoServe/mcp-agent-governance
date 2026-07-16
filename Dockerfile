@@ -36,6 +36,7 @@ ENV PATH="/venv/bin:$PATH"
 
 # Copy application source
 COPY app/ ./app/
+COPY scripts/ ./scripts/
 
 # Non-root user for security
 RUN useradd --no-create-home --shell /bin/false appuser
