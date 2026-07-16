@@ -31,7 +31,7 @@ _DSN = os.environ.get(
 )
 
 SERVER_CMD = [
-    os.environ.get("VIRTUAL_ENV", ".venv") + "/Scripts/python",
+    sys.executable,
     "-m", "app.mcp_server",
 ]
 
