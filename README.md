@@ -1,104 +1,54 @@
-# Agent Spending Governor (MCP Server)
+# Agent Spending Governor
 
-A governed spending-reservation and audit-logging system for AI agents, built with FastAPI, PostgreSQL, `asyncpg`, and FastMCP.
+[![CI](https://github.com/CognitoServe/mcp-agent-governance/actions/workflows/ci.yml/badge.svg)](https://github.com/CognitoServe/mcp-agent-governance/actions/workflows/ci.yml)
 
-This repository implements a secure, robust sandbox environment that enforces resource limits, permission scopes, and tamper-evident audit trails on actions taken by autonomous agents.
+The Agent Spending Governor is an intelligent proxy that places immutable, cryptographic constraints on autonomous AI agent spending and tool execution. By moving governance enforcement out of the LLM prompt and into a transactional Postgres database using a hash-chained ledger, the system guarantees that compromised, hallucinating, or malicious agents cannot exceed their financial caps or escalate their granted permissions, regardless of the inputs they receive.
 
----
+## Verified
 
-## Architecture Overview
+Tests pass consistently on both Windows and Linux environments from a fresh virtual environment requiring zero manual steps beyond `pip install -r requirements.txt`. The adversarial test suite runs continuously via GitHub Actions, verifying 8 specific threat categories against a live Postgres instance: Concurrent cap-breach, Injection-style arguments, Permission escalation, Revoked-agent replay, Revoke-vs-reserve race, Negative-cost injection, Audit deletion detection, and Malformed input. The raw evidence of the adversarial suite blocking these behaviors can be viewed directly in the Actions logs.
 
-```mermaid
-flowchart TD
-    Client[MCP Client / User] -->|Call Tool| Server[FastMCP Server]
-    Server -->|1. reserve cost| Gov[Governance Layer]
-    Gov -->|Atomic UPDATE| DB[(PostgreSQL)]
-    Gov -->|2. log decision| Audit[Hash-Chained Audit Log]
-    Audit -->|Compute SHA256| DB
-    Server -->|3. execute action| Action[Simulated Action]
-    Server -->|4. settle cost| Gov
-```
+## Architecture
 
-### 1. Atomic Spend Reservation (`app/governance.py`)
-To prevent double-spending and race conditions, the governance system does not use a typical read-then-write check. Instead, budget validation, status check, permission lookup, and budget reservation are performed in a **single atomic `UPDATE` statement**:
-- Verifies the agent is `'active'`.
-- Verifies the agent has the permission to call the specified tool (with any optional `max_per_call` constraint).
-- Verifies the requested cost plus current spending (`spent + reserved + cost`) does not exceed the agent's lifetime limit (`cap`).
-- Increments `reserved` and returns the agent ID to confirm success.
-
-### 2. Tamper-Evident Hash-Chained Audit Log (`app/audit.py`)
-Every decision (allowed or denied) is logged to the `audit_log` table. 
-- Each agent maintains its own cryptographic hash chain.
-- The `row_hash` of each record is a SHA-256 digest of the current record's details concatenated with the `row_hash` of the previous record.
-- **Concurrency Protection**: We use PostgreSQL transaction-level advisory locks (`pg_advisory_xact_lock`) keyed to the `agent_id` to serialize concurrent log insertions. This prevents chain-splitting and guarantees order.
-- A verify utility (`verify_chain`) walks the chain to validate integrity, detecting any unauthorized updates or row deletions.
-
-### 3. FastMCP Server (`app/mcp_server.py`)
-Exposes three sample tools simulating governed actions:
-*   `search(agent_id, query)` - Cost: `$0.50`
-*   `write_record(agent_id, record)` - Cost: `$2.00`
-*   `disburse(agent_id, amount, recipient)` - Cost: dynamic (delegated transaction)
-
----
-
-## Database Schema
-
-Defined in `app/schema.sql`:
-*   `agents`: Manages lifetime spending cap, actual spend, current reserved budget, status (`active`/`revoked`), and constraints ensuring balances never go negative or breach the cap.
-*   `agent_permissions`: Defines per-agent, per-tool permission rules and per-call spending ceilings.
-*   `audit_log`: Chronological ledger containing SHA-256 chained hashes (`prev_hash`, `row_hash`).
-*   `error_log`: Diagnostic error dump.
-
----
-
-## Adversarial Scorecard
-
-A standalone verification suite (`scripts/adversarial_scorecard.py`) attacks the system's defenses across 8 vectors:
-1.  **Concurrent Cap-Breach**: Blasts parallel disbursement calls to ensure final `spent + reserved` never exceeds `cap`.
-2.  **Injection-Style Arguments**: Passes prompt injection payloads to verify strings have no effect on core constraints.
-3.  **Permission Escalation**: Validates unauthorized tools are correctly rejected as `'denied'`.
-4.  **Revoked-Agent Replay**: Ensures revoked agents are immediately blocked from all actions.
-5.  **Revoke-vs-reserve Race**: Floods concurrent reservations during a revocation to verify no approvals occur after revocation.
-6.  **Negative-Cost Injection**: Attempts to inject negative costs (refund attacks) to verify constraints block balance manipulation.
-7.  **Audit Deletion Detection**: Deletes a ledger entry and asserts `verify_chain` identifies the exact broken link.
-8.  **Malformed Input**: Sends invalid structures to ensure clean error containment.
-
----
+1. **Agent Context**: The autonomous agent decides it needs to execute a tool.
+2. **MCP**: The agent attempts to call the tool via the Model Context Protocol.
+3. **Governance Check (Reserve)**: Before execution, the system intercepts the call, validates permissions, and reserves the maximum potential cost of the tool within the Postgres database.
+4. **Execute**: The underlying tool executes in reality.
+5. **Settle & Audit**: The exact final cost is settled, the reservation is cleared, and an immutable, hash-chained audit log entry is written containing the cryptographic footprint of the transaction.
+6. **Response**: The result is returned to the agent.
 
 ## Quickstart
 
-### Prerequisites
-*   Python 3.10+
-*   PostgreSQL
-
-### Installation
-
-1.  Clone the repository and navigate to the project directory.
-2.  Create and activate a virtual environment:
-    ```bash
-    python -m venv .venv
-    source .venv/bin/activate  # Or .venv\Scripts\activate on Windows
-    ```
-3.  Install dependencies:
-    ```bash
-    pip install -r requirements.txt
-    ```
-4.  Configure database connection string in `.env`:
-    ```ini
-    DATABASE_URL=postgresql://<user>:<password>@localhost:5432/<db_name>
-    ```
-
-### Run Tests and Adversarial Harness
-
+### Docker Compose
+To run the system in an isolated environment with Postgres pre-configured:
 ```bash
-# Run unit tests
-pytest
+docker compose up --build -d
+```
+The API and read-only dashboard will be available at `http://localhost:8000`.
 
-# Run the adversarial scorecard
-python scripts/adversarial_scorecard.py
+### Local Installation (Pip)
+To run natively:
+```bash
+# 1. Start a local Postgres instance
+# 2. Setup your virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+
+# 3. Apply the database schema
+psql -h localhost -U postgres -d myapp -f app/schema.sql
+
+# 4. Start the server
+export DATABASE_URL=postgresql://postgres:changeme@localhost:5432/myapp
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
----
+## Bugs I actually hit building this
+
+- **pytest-asyncio event loop scoping**: Database tests were failing with `attached to a different loop` errors because `pytest-asyncio` by default creates a new event loop per test, while our asyncpg connection pool was bound to the module-scoped loop. The fix was explicitly overriding the `event_loop` fixture in `conftest.py` to yield a single module-scoped event loop.
+- **Decimal hash mismatches**: Cryptographic hashes were failing verification because `Decimal('0')` and `Decimal('0.00')` produce different string representations during JSON serialization. The fix involved normalizing all decimal values to exactly two decimal places in the Python layer prior to hashing.
+- **Identical timestamp concurrency**: During high-concurrency race condition tests, multiple audit log entries were being written in the exact same millisecond, breaking the strictly chronological `ORDER BY timestamp` requirement of the hash chain. The fix was altering the order logic to fall back to `ORDER BY timestamp ASC, id ASC`.
+- **pywin32 unconditional pin**: The `requirements.txt` file contained an unconditional pin for `pywin32==312`, which completely broke fresh `pip install -r requirements.txt` execution on Linux/Mac as pip evaluates the entire graph before installing. The fix was appending the environment marker `; sys_platform == 'win32'` to Windows-specific dependencies.
 
 ## License
 
