@@ -95,14 +95,13 @@ async def reserve(
     allowed = row is not None
 
     # ── Determine denial reason for the audit log ─────────────────────────
-    if allowed:
-        reason = "ok"
-    else:
+    if not allowed:
         reason = await _reserve_denial_reason(pool, agent_id, tool_name, cost)
-
-    await _fire_log(pool, agent_id, tool_name,
-              "allowed" if allowed else "denied", reason,
-              est_cost=cost, actual_cost=None)
+        # We only log denials at reserve time. Successes are deferred to settle()
+        # so that the actual cost and final completion status are recorded exactly once.
+        await _fire_log(pool, agent_id, tool_name,
+                  "denied", reason,
+                  est_cost=cost, actual_cost=None)
 
     return allowed
 

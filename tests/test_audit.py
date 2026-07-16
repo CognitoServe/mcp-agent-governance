@@ -139,8 +139,8 @@ async def test_audit_chain_detects_tamper() -> None:
         # ── Collect the audit row ids written for this agent ──────────────
         audit_ids = await _get_audit_ids_for_agent(pool, aid)
         print(f"\n  audit row ids written: {audit_ids}")
-        assert len(audit_ids) == 5, (
-            f"Expected 5 audit rows, got {len(audit_ids)}.  "
+        assert len(audit_ids) == 3, (
+            f"Expected 3 audit rows, got {len(audit_ids)}.  "
             f"Ids: {audit_ids}"
         )
 
