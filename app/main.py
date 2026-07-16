@@ -59,6 +59,7 @@ async def health() -> dict:
 
 
 # ---------------------------------------------------------------------------
-# TODO: mount your routers here
-# e.g.  app.include_router(items.router, prefix="/items", tags=["items"])
+# Dashboard routes
 # ---------------------------------------------------------------------------
+from app.dashboard import router as dashboard_router
+app.include_router(dashboard_router)

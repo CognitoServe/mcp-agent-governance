@@ -33,3 +33,7 @@ coverage.xml
 
 # macOS
 .DS_Store
+
+# Local DB & logs
+local_pg_data/
+logfile
