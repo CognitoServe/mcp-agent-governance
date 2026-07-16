@@ -26,7 +26,7 @@ attrs==26.1.0
 certifi==2026.6.17
 cffi==2.1.0
 click==8.4.2
-colorama==0.4.6
+colorama==0.4.6 ; sys_platform == 'win32'
 cryptography==49.0.0
 h11==0.16.0
 httpcore==1.0.9
@@ -43,7 +43,7 @@ pydantic-settings==2.14.2
 Pygments==2.20.0
 PyJWT==2.13.0
 python-multipart==0.0.32
-pywin32==312
+pywin32==312 ; sys_platform == 'win32'
 referencing==0.37.0
 rich==15.0.0
 rpds-py==2026.6.3
