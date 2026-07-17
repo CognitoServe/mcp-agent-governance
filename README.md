@@ -8,6 +8,10 @@ The Agent Spending Governor is an intelligent proxy that places immutable, crypt
 
 Tests pass consistently on both Windows and Linux environments from a fresh virtual environment requiring zero manual steps beyond `pip install -r requirements.txt`. The adversarial test suite runs continuously via GitHub Actions, verifying 8 specific threat categories against a live Postgres instance: Concurrent cap-breach, Injection-style arguments, Permission escalation, Revoked-agent replay, Revoke-vs-reserve race, Negative-cost injection, Audit deletion detection, and Malformed input. The raw evidence of the adversarial suite blocking these behaviors can be viewed directly in the Actions logs.
 
+Below is a screenshot of the mission control dashboard showing the live system status and the completed security scorecard with all 8 adversarial threat vectors successfully mitigated:
+
+![Security Scorecard](docs/images/dashboard_scorecard.png)
+
 ## Architecture
 
 1. **Agent Context**: The autonomous agent decides it needs to execute a tool.
