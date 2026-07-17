@@ -16,6 +16,17 @@ Tests pass consistently on both Windows and Linux environments from a fresh virt
 4. **Execute**: The underlying tool executes in reality.
 5. **Settle & Audit**: The exact final cost is settled, the reservation is cleared, and an immutable, hash-chained audit log entry is written containing the cryptographic footprint of the transaction.
 6. **Response**: The result is returned to the agent.
+## Bugs I actually hit building this
+
+1. **pytest-asyncio event-loop-per-test scoping**: An asyncpg pool created in a fixture bound to a different event loop than the test function, causing "attached to a different loop" errors. This was fixed by creating the pool inside the test body so it always shares the test's own loop.
+
+2. **Decimal('0') vs Decimal('0.00') hash mismatch**: The audit hash was computed from a locally-constructed Decimal('0') on write, but Postgres always returns NUMERIC(12,2) values with 2 decimal places on read, causing the same value to hash differently depending on whether it originated from Python or the database. This was fixed by canonicalizing every value to 2 decimal places before hashing, on both write and verify.
+
+3. **Identical timestamps in concurrent audit writes**: The timestamp `ts` was captured before acquiring the per-agent advisory lock, causing multiple concurrent tasks in `asyncio.gather` to grab the same microsecond value before reaching the database. This was fixed by capturing `ts` after the lock is acquired, ensuring it reflects when each write actually got its turn.
+
+4. **pywin32 breaking Linux installs**: The `requirements.txt` file was generated via a raw `pip freeze` on a Windows development machine, which unconditionally captured Windows-specific packages. Since pip resolves the full dependency graph before installation, this unsatisfiable platform-specific pin caused the entire installation to fail on Linux. This was fixed by adding environment markers (`; sys_platform == 'win32'`).
+
+5. **Audit log gap on tool failure**: If a tool call succeeded past `reserve()` but failed during execution before `settle()` ran, the reservation would leak permanently against the agent's cap with zero audit trail. This was fixed by wrapping the execute step in its own `try/except` block that calls `refund()` on failure, ensuring the reservation is released and exactly one audit row is written.
 
 ## Quickstart
 
@@ -42,13 +53,6 @@ psql -h localhost -U postgres -d myapp -f app/schema.sql
 export DATABASE_URL=postgresql://postgres:changeme@localhost:5432/myapp
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
-
-## Bugs I actually hit building this
-
-- **pytest-asyncio event loop scoping**: Database tests were failing with `attached to a different loop` errors because `pytest-asyncio` by default creates a new event loop per test, while our asyncpg connection pool was bound to the module-scoped loop. The fix was explicitly overriding the `event_loop` fixture in `conftest.py` to yield a single module-scoped event loop.
-- **Decimal hash mismatches**: Cryptographic hashes were failing verification because `Decimal('0')` and `Decimal('0.00')` produce different string representations during JSON serialization. The fix involved normalizing all decimal values to exactly two decimal places in the Python layer prior to hashing.
-- **Identical timestamp concurrency**: During high-concurrency race condition tests, multiple audit log entries were being written in the exact same millisecond, breaking the strictly chronological `ORDER BY timestamp` requirement of the hash chain. The fix was altering the order logic to fall back to `ORDER BY timestamp ASC, id ASC`.
-- **pywin32 unconditional pin**: The `requirements.txt` file contained an unconditional pin for `pywin32==312`, which completely broke fresh `pip install -r requirements.txt` execution on Linux/Mac as pip evaluates the entire graph before installing. The fix was appending the environment marker `; sys_platform == 'win32'` to Windows-specific dependencies.
 
 ## License
 
