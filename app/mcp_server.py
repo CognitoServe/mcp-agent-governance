@@ -34,7 +34,7 @@ from decimal import Decimal
 import asyncpg
 from mcp.server.fastmcp import FastMCP
 
-from app.governance import reserve, settle
+from app.governance import reserve, settle, refund
 from app.governance import _reserve_denial_reason   # reuse the diagnostic SELECT
 from app.errors import log_error
 
@@ -44,7 +44,7 @@ _DSN = os.environ.get(
     "DATABASE_URL",
     os.environ.get(
         "TEST_DATABASE_URL",
-        "postgresql://postgres:postgres@localhost:5432/test_db",
+        "postgresql://postgres:changeme@localhost:5432/myapp",
     ),
 )
 
@@ -130,20 +130,24 @@ async def search(agent_id: str, query: str) -> dict:
             }
 
         # ── Simulated action ──────────────────────────────────────────────────────
-        result_payload = {
-            "status":  "ok",
-            "tool":    "search",
-            "agent":   agent_id,
-            "query":   query,
-            "results": [
-                {"title": "Result 1 for: " + query, "url": "https://example.com/1"},
-                {"title": "Result 2 for: " + query, "url": "https://example.com/2"},
-            ],
-            "cost_charged": str(cost),
-        }
+        try:
+            result_payload = {
+                "status":  "ok",
+                "tool":    "search",
+                "agent":   agent_id,
+                "query":   query,
+                "results": [
+                    {"title": "Result 1 for: " + query, "url": "https://example.com/1"},
+                    {"title": "Result 2 for: " + query, "url": "https://example.com/2"},
+                ],
+                "cost_charged": str(cost),
+            }
 
-        await settle(pool, agent_id, cost, cost, tool_name="search")
-        return result_payload
+            await settle(pool, agent_id, cost, cost, tool_name="search")
+            return result_payload
+        except Exception as exc:
+            await refund(pool, agent_id, cost, tool_name="search", reason="tool_execution_failed")
+            raise
     except Exception as exc:
         pool = await _get_pool()
         await log_error(pool, "mcp_server.search", exc, {"agent_id": agent_id, "query": query})
@@ -179,22 +183,26 @@ async def write_record(agent_id: str, record: str) -> dict:
             }
 
         # ── Simulated action ──────────────────────────────────────────────────────
-        import hashlib, datetime
-        record_id = hashlib.sha1(
-            f"{agent_id}:{record}:{datetime.datetime.utcnow().isoformat()}".encode()
-        ).hexdigest()[:12]
+        try:
+            import hashlib, datetime
+            record_id = hashlib.sha1(
+                f"{agent_id}:{record}:{datetime.datetime.utcnow().isoformat()}".encode()
+            ).hexdigest()[:12]
 
-        result_payload = {
-            "status":       "ok",
-            "tool":         "write_record",
-            "agent":        agent_id,
-            "record_id":    record_id,
-            "bytes_written": len(record.encode()),
-            "cost_charged": str(cost),
-        }
+            result_payload = {
+                "status":       "ok",
+                "tool":         "write_record",
+                "agent":        agent_id,
+                "record_id":    record_id,
+                "bytes_written": len(record.encode()),
+                "cost_charged": str(cost),
+            }
 
-        await settle(pool, agent_id, cost, cost, tool_name="write_record")
-        return result_payload
+            await settle(pool, agent_id, cost, cost, tool_name="write_record")
+            return result_payload
+        except Exception as exc:
+            await refund(pool, agent_id, cost, tool_name="write_record", reason="tool_execution_failed")
+            raise
     except Exception as exc:
         pool = await _get_pool()
         await log_error(pool, "mcp_server.write_record", exc, {"agent_id": agent_id})
@@ -251,21 +259,25 @@ async def disburse(agent_id: str, amount: str, recipient: str) -> dict:
             }
 
         # ── Simulated disbursement ────────────────────────────────────────────────
-        import uuid
-        tx_id = str(uuid.uuid4())
+        try:
+            import uuid
+            tx_id = str(uuid.uuid4())
 
-        result_payload = {
-            "status":      "ok",
-            "tool":        "disburse",
-            "agent":       agent_id,
-            "tx_id":       tx_id,
-            "amount":      amount,
-            "recipient":   recipient,
-            "cost_charged": amount,
-        }
+            result_payload = {
+                "status":      "ok",
+                "tool":        "disburse",
+                "agent":       agent_id,
+                "tx_id":       tx_id,
+                "amount":      amount,
+                "recipient":   recipient,
+                "cost_charged": amount,
+            }
 
-        await settle(pool, agent_id, cost, cost, tool_name="disburse")
-        return result_payload
+            await settle(pool, agent_id, cost, cost, tool_name="disburse")
+            return result_payload
+        except Exception as exc:
+            await refund(pool, agent_id, cost, tool_name="disburse", reason="tool_execution_failed")
+            raise
     except Exception as exc:
         pool = await _get_pool()
         await log_error(pool, "mcp_server.disburse", exc, {"agent_id": agent_id, "amount": amount, "recipient": recipient})

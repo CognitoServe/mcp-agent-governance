@@ -40,7 +40,7 @@ SERVER_ENV = {
         "DATABASE_URL",
         os.environ.get(
             "TEST_DATABASE_URL",
-            "postgresql://postgres:postgres@localhost:5432/test_db",
+            "postgresql://postgres:changeme@localhost:5432/myapp",
         ),
     ),
 }

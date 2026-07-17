@@ -30,7 +30,7 @@ from app.governance import refund, reserve, revoke, settle
 
 _DSN = os.environ.get(
     "TEST_DATABASE_URL",
-    "postgresql://postgres:postgres@localhost:5432/test_db",
+    "postgresql://postgres:changeme@localhost:5432/myapp",
 )
 _SCHEMA_PATH = Path(__file__).parent.parent / "app" / "schema.sql"
 

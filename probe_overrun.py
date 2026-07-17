@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 GENESIS = "0" * 64
-DSN = os.environ.get("TEST_DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/test_db")
+DSN = os.environ.get("TEST_DATABASE_URL", "postgresql://postgres:changeme@localhost:5432/myapp")
 
 async def main():
     pool = await asyncpg.create_pool(DSN)

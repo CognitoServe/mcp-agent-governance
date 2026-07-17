@@ -40,7 +40,7 @@ from app.governance import activate, refund, reserve, revoke, settle
 
 _DSN = os.environ.get(
     "TEST_DATABASE_URL",
-    "postgresql://postgres:postgres@localhost:5432/test_db",
+    "postgresql://postgres:changeme@localhost:5432/myapp",
 )
 
 _SCHEMA_PATH = Path(__file__).parent.parent / "app" / "schema.sql"
@@ -400,3 +400,54 @@ async def test_revoke_blocks_immediate_next_reserve() -> None:
     finally:
         await _cleanup(pool, aid)
         await pool.close()
+
+
+# ---------------------------------------------------------------------------
+# Test 9 — Tool execution failure: refund and audit logging on exception
+# ---------------------------------------------------------------------------
+
+async def test_tool_failure_refunds_and_logs() -> None:
+    """
+    Deliberately trigger an exception inside search() after a successful reserve()
+    and verify that refund() is called (reserved returns to 0), exactly one
+    audit log row with 'tool_execution_failed' reason is written, and the
+    original exception propagates.
+    """
+    import app.mcp_server
+    from app.mcp_server import search
+    
+    pool = await _make_pool()
+    app.mcp_server._pool = pool
+    
+    aid = await _seed_agent(pool)
+    await _grant(pool, aid, "search")
+    
+    # Clean audit logs for this agent
+    async with pool.acquire() as conn:
+        await conn.execute("DELETE FROM audit_log WHERE agent_id = $1", aid)
+        
+    try:
+        pre_row = await _read(pool, aid)
+        assert pre_row["reserved"] == Decimal("0.00")
+        
+        # query=None triggers TypeError during string concatenation inside search()
+        with pytest.raises(TypeError):
+            await search(agent_id=aid, query=None)
+            
+        post_row = await _read(pool, aid)
+        # Reserved column returns to pre-call value (0)
+        assert post_row["reserved"] == Decimal("0.00")
+        
+        # Exactly one audit_log row exists with the failure reason
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT decision, reason FROM audit_log WHERE agent_id = $1", aid
+            )
+        assert len(rows) == 1, f"Expected exactly 1 audit row, got {len(rows)}"
+        assert rows[0]["decision"] == "allowed"
+        assert rows[0]["reason"] == "tool_execution_failed"
+        
+    finally:
+        await _cleanup(pool, aid)
+        await pool.close()
+        app.mcp_server._pool = None

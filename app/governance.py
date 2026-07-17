@@ -153,6 +153,7 @@ async def settle(
     actual_cost: Decimal,
     *,
     tool_name: str = "settle",
+    reason: str | None = None,
 ) -> bool:
     """
     Settle a completed tool call: release the reservation and record actual cost.
@@ -196,10 +197,10 @@ async def settle(
         actual_cost,
     )
     allowed = row is not None
-    reason = "ok" if allowed else "settle_denied"
+    actual_reason = reason or ("ok" if allowed else "settle_denied")
 
     await _fire_log(pool, agent_id, tool_name,
-              "allowed" if allowed else "denied", reason,
+              "allowed" if allowed else "denied", actual_reason,
               est_cost=reserved_amount, actual_cost=actual_cost)
 
     return allowed
@@ -215,6 +216,7 @@ async def refund(
     reserved_amount: Decimal,
     *,
     tool_name: str = "refund",
+    reason: str = "refund",
 ) -> bool:
     """
     Convenience wrapper for a full tool-failure refund.
@@ -224,7 +226,7 @@ async def refund(
     spent — as if the tool never ran.
     """
     return await settle(pool, agent_id, reserved_amount, Decimal("0"),
-                        tool_name=tool_name)
+                        tool_name=tool_name, reason=reason)
 
 
 # ---------------------------------------------------------------------------
